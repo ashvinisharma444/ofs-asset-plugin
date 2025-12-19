@@ -3,164 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Inspection Plugin</title>
+    <title>Simple OFS Plugin</title>
     <style>
-        :root { --primary: #0073e6; --success: #28a745; --bg: #f4f7f6; --pending: #ffc107; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: var(--bg); color: #333; }
-        .header { background: var(--primary); color: white; padding: 15px; position: sticky; top: 0; display: flex; align-items: center; gap: 10px; z-index: 100; }
-        .view { display: none; padding: 15px; }
-        .view.active { display: block; }
-        .asset-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ccc; cursor:pointer; }
-        .asset-item.done { border-left-color: var(--success); }
-        .asset-item.pending { border-left-color: var(--pending); }
-        .search-bar { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
-        textarea { width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px; margin-top: 10px; }
-        .btn { padding: 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
-        .btn-main { background: var(--primary); color: white; }
-        .btn-save { background: var(--success); color: white; }
-        .btn-back { background: transparent; color: white; border: 1px solid white; padding: 5px 10px; width: auto; margin: 0; }
-        #qr-scanner { width: 100%; height: 200px; background: #000; display:none; border-radius: 8px; margin-bottom: 10px; }
+        body { 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            background-color: #f0f0f0; 
+        }
+        .card { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+            text-align: center; 
+        }
+        button { 
+            padding: 15px 30px; 
+            font-size: 18px; 
+            background-color: #0073e6; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
     </style>
 </head>
 <body>
 
-<div id="view-list" class="view active">
-    <div class="header"><strong>Asset Inspection</strong></div>
-    <div style="padding: 10px;">
-        <input type="text" id="search-input" class="search-bar" placeholder="Search assets..." onkeyup="renderAssets()">
-        <button class="btn btn-main" onclick="startQRScan()">📷 Scan Asset QR</button>
-        <canvas id="qr-scanner"></canvas>
-        <div id="asset-container"></div>
-        <button class="btn btn-save" style="margin-top: 30px;" onclick="finalizeAndSubmit()">Submit to Oracle</button>
-        <button class="btn" style="background:#ccc;" onclick="closePlugin()">Cancel</button>
-    </div>
+<div class="card">
+    <h1>Plugin Active</h1>
+    <p>The connection to Oracle is successful.</p>
+    <button onclick="closePlugin()">Close Plugin</button>
 </div>
-
-<div id="view-details" class="view">
-    <div class="header">
-        <button class="btn btn-back" onclick="showView('view-list')">← Back</button>
-        <strong id="detail-title">Inspect Asset</strong>
-    </div>
-    <div style="background: white; padding: 20px; border-radius: 8px; margin-top:15px;">
-        <h2 id="asset-name-header" style="margin:0 0 10px 0;"></h2>
-        <textarea id="asset-notes" placeholder="Enter inspection notes..."></textarea>
-        <button class="btn btn-save" onclick="saveAssetLocally()">Mark as Done</button>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
 <script>
-    // HARDCODED ASSETS
-    let assets = [
-        { id: 1, name: "HVAC Unit A", status: "pending", notes: "" },
-        { id: 2, name: "Fire Extinguisher 04", status: "pending", notes: "" },
-        { id: 3, name: "UPS Backup System", status: "pending", notes: "" },
-        { id: 4, name: "Server Rack 01", status: "pending", notes: "" }
-    ];
+    let origin = "";
 
-    let currentAssetId = null;
-    let origin = ""; 
-
-    // --- ORACLE HANDSHAKE (VITAL) ---
+    // 1. Listen for the 'init' message from Oracle Field Service
     window.addEventListener("message", function(event) {
         if (event.data.method === "init") {
+            // Store the origin for security
             origin = event.origin;
-            // Send ready immediately to prevent "Reset Sync Handler"
+            
+            // 2. IMMEDIATE HANDSHAKE: Signal Oracle that the plugin is ready
+            // This prevents the "Reset sync handler" timeout
             window.parent.postMessage({ method: 'ready' }, origin);
-            console.log("OFS Handshake Successful");
-            renderAssets();
+            
+            console.log("Handshake complete. Origin:", origin);
         }
     }, false);
 
-    function finalizeAndSubmit() {
-        const results = assets.map(a => `${a.name}: ${a.status}`).join(', ');
-        window.parent.postMessage({
-            method: 'close',
-            activity: { "asset_list": results } // It will write back the summary to this field
-        }, origin);
-    }
-
+    // 3. Simple call to close the plugin and return to OFS
     function closePlugin() {
         window.parent.postMessage({ method: 'close' }, origin);
     }
-
-    // --- UI LOGIC ---
-    function renderAssets() {
-        const container = document.getElementById('asset-container');
-        const searchTerm = document.getElementById('search-input').value.toLowerCase();
-        container.innerHTML = "";
-
-        assets.filter(a => a.name.toLowerCase().includes(searchTerm)).forEach(asset => {
-            const div = document.createElement('div');
-            div.className = `asset-item ${asset.status}`;
-            div.onclick = () => openAsset(asset.id);
-            div.innerHTML = `<b>${asset.name}</b><span>${asset.status === 'done' ? '✅' : '▶️'}</span>`;
-            container.appendChild(div);
-        });
-    }
-
-    function openAsset(id) {
-        currentAssetId = id;
-        const asset = assets.find(a => a.id === id);
-        document.getElementById('asset-name-header').innerText = asset.name;
-        document.getElementById('asset-notes').value = asset.notes;
-        showView('view-details');
-    }
-
-    function saveAssetLocally() {
-        const asset = assets.find(a => a.id === currentAssetId);
-        asset.notes = document.getElementById('asset-notes').value;
-        asset.status = 'done';
-        showView('view-list');
-    }
-
-    function showView(viewId) {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.getElementById(viewId).classList.add('active');
-        if(viewId === 'view-list') renderAssets();
-    }
-
-    // --- QR SCAN ---
-    let videoStream;
-    function startQRScan() {
-        const canvas = document.getElementById('qr-scanner');
-        canvas.style.display = 'block';
-        const context = canvas.getContext('2d');
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            .then(stream => {
-                videoStream = stream;
-                const video = document.createElement('video');
-                video.srcObject = stream;
-                video.setAttribute('playsinline', true);
-                video.play();
-                function tick() {
-                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                        canvas.height = video.videoHeight;
-                        canvas.width = video.videoWidth;
-                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        const code = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (code) {
-                            stopQRScan();
-                            const found = assets.find(a => a.name.toLowerCase() === code.data.toLowerCase());
-                            if(found) openAsset(found.id);
-                            return;
-                        }
-                    }
-                    if (videoStream) requestAnimationFrame(tick);
-                }
-                tick();
-            }).catch(() => alert('Camera error. Please ensure HTTPS.'));
-    }
-
-    function stopQRScan() {
-        document.getElementById('qr-scanner').style.display = 'none';
-        if(videoStream) {
-            videoStream.getTracks().forEach(track => track.stop());
-            videoStream = null;
-        }
-    }
 </script>
+
 </body>
 </html>
