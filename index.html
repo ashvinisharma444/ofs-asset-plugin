@@ -1,68 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple OFS Plugin</title>
-    <style>
-        body { 
-            font-family: sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            margin: 0; 
-            background-color: #f0f0f0; 
-        }
-        .card { 
-            background: white; 
-            padding: 40px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
-            text-align: center; 
-        }
-        button { 
-            padding: 15px 30px; 
-            font-size: 18px; 
-            background-color: #0073e6; 
-            color: white; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
-        }
-    </style>
+    <meta charset="utf-8">
+    <title>Handshake Test</title>
 </head>
-<body>
+<body style="background: #eee; display: flex; align-items: center; justify-content: center; height: 100vh;">
+    <div style="text-align: center; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <h2 id="status">Waiting for Handshake...</h2>
+        <button onclick="closeNow()" style="padding: 10px 20px;">Return to Oracle</button>
+    </div>
 
-<div class="card">
-    <h1>Plugin Active</h1>
-    <p>The connection to Oracle is successful.</p>
-    <button onclick="closePlugin()">Close Plugin</button>
-</div>
+    <script>
+        var origin = "";
 
-<script>
-    let origin = "";
+        window.addEventListener("message", function(event) {
+            // Log everything to your browser console (F12) to see what Oracle is sending
+            console.log("Message Received:", event.data);
 
-    // 1. Listen for the 'init' message from Oracle Field Service
-    window.addEventListener("message", function(event) {
-        if (event.data.method === "init") {
-            // Store the origin for security
-            origin = event.origin;
-            
-            // 2. IMMEDIATE HANDSHAKE: Signal Oracle that the plugin is ready
-            // This prevents the "Reset sync handler" timeout
-            window.parent.postMessage({ method: 'ready' }, origin);
-            
-            console.log("Handshake complete. Origin:", origin);
+            var data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+
+            if (data.method === "init") {
+                origin = event.origin;
+                document.getElementById('status').innerText = "Handshake Successful!";
+
+                // FORMAL HANDSHAKE: Send back as a JSON string for maximum compatibility
+                var readyMsg = JSON.stringify({
+                    apiVersion: 1,
+                    method: 'ready'
+                });
+
+                window.parent.postMessage(readyMsg, origin);
+            }
+        }, false);
+
+        function closeNow() {
+            var closeMsg = JSON.stringify({
+                apiVersion: 1,
+                method: 'close'
+            });
+            window.parent.postMessage(closeMsg, origin);
         }
-    }, false);
-
-    // 3. Simple call to close the plugin and return to OFS
-    function closePlugin() {
-        window.parent.postMessage({ method: 'close' }, origin);
-    }
-</script>
-
+    </script>
 </body>
 </html>
