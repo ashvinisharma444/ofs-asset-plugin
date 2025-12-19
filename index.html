@@ -1,51 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Minimal OFS Handshake</title>
-</head>
-<body style="background: #ffffff; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
-    <div style="text-align: center;">
-        <h2 id="status">Waiting for Oracle...</h2>
-        <button onclick="closePlugin()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Return to Oracle</button>
+    <title>OFS Handshake</title>
+    </head>
+<body style="margin:0; padding:20px; font-family:sans-serif;">
+
+    <div id="app-status">
+        <h2>Connecting to Oracle...</h2>
+        <p>If you see this, the page has loaded. Waiting for init signal...</p>
     </div>
 
     <script>
-        var origin = "";
+        // Use a global variable for origin to ensure it's available for all functions
+        var ofscOrigin = "";
 
-        // Listen for the 'init' call from Oracle
+        function sendToOracle(method) {
+            if (!ofscOrigin) return;
+            
+            // Using the strict JSON string format for maximum compatibility
+            var message = JSON.stringify({
+                apiVersion: 1,
+                method: method
+            });
+            
+            console.log("Sending to Oracle:", message);
+            window.parent.postMessage(message, ofscOrigin);
+        }
+
         window.addEventListener("message", function(event) {
-            // Log to F12 console to verify hit
-            console.log("Plugin received message:", event.data);
+            console.log("Raw message received:", event.data);
 
             var data;
             try {
+                // Handle both object and string data formats
                 data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
             } catch (e) {
+                console.error("JSON Parse Error");
                 return;
             }
 
             if (data.method === "init") {
-                origin = event.origin;
-                document.getElementById('status').innerText = "Connected Successfully!";
+                ofscOrigin = event.origin;
+                document.getElementById('app-status').innerHTML = "<h1>Connected!</h1><button onclick='closePlugin()'>Return to OFS</button>";
 
-                // MANDATORY RESPONSE: Immediate handshake
-                // We send it as a stringified JSON for maximum compatibility
-                var readyResponse = JSON.stringify({
-                    apiVersion: 1,
-                    method: 'ready'
-                });
-
-                window.parent.postMessage(readyResponse, origin);
+                // IMMEDIATE HANDSHAKE
+                // This stops the 'Reset sync handler' timeout
+                sendToOracle('ready');
             }
         }, false);
 
         function closePlugin() {
-            var closeMsg = JSON.stringify({
-                apiVersion: 1,
-                method: 'close'
-            });
-            window.parent.postMessage(closeMsg, origin);
+            sendToOracle('close');
         }
     </script>
 </body>
