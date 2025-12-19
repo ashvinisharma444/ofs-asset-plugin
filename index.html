@@ -2,43 +2,57 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Handshake Test</title>
+    <title>OFS Plugin Failsafe</title>
 </head>
-<body style="background: #eee; display: flex; align-items: center; justify-content: center; height: 100vh;">
-    <div style="text-align: center; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <h2 id="status">Waiting for Handshake...</h2>
-        <button onclick="closeNow()" style="padding: 10px 20px;">Return to Oracle</button>
+<body style="background: #f0f0f0; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+        <h2 id="msg">Awaiting Connection...</h2>
+        <button onclick="closePlugin()" style="padding: 10px 20px; cursor: pointer;">Return to Oracle</button>
     </div>
 
     <script>
         var origin = "";
 
-        window.addEventListener("message", function(event) {
-            // Log everything to your browser console (F12) to see what Oracle is sending
-            console.log("Message Received:", event.data);
+        // Standardized function to talk to Oracle
+        function callOracle(data) {
+            if (origin) {
+                // Some versions of OFS prefer strings, some prefer objects. 
+                // We send a string to be safe.
+                var message = JSON.stringify(data);
+                window.parent.postMessage(message, origin);
+            }
+        }
 
-            var data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+        window.addEventListener("message", function(event) {
+            // Log to console so you can see it in your debugger
+            console.log("Plugin received message:", event.data);
+
+            var data;
+            try {
+                data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+            } catch (e) {
+                console.error("Failed to parse message data");
+                return;
+            }
 
             if (data.method === "init") {
                 origin = event.origin;
-                document.getElementById('status').innerText = "Handshake Successful!";
+                document.getElementById('msg').innerText = "Connected to Oracle!";
 
-                // FORMAL HANDSHAKE: Send back as a JSON string for maximum compatibility
-                var readyMsg = JSON.stringify({
+                // MANDATORY HANDSHAKE
+                // Sending apiVersion: 1 is often required for the handshake to validate
+                callOracle({
                     apiVersion: 1,
                     method: 'ready'
                 });
-
-                window.parent.postMessage(readyMsg, origin);
             }
         }, false);
 
-        function closeNow() {
-            var closeMsg = JSON.stringify({
+        function closePlugin() {
+            callOracle({
                 apiVersion: 1,
                 method: 'close'
             });
-            window.parent.postMessage(closeMsg, origin);
         }
     </script>
 </body>
