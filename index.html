@@ -2,57 +2,50 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>OFS Plugin Failsafe</title>
+    <title>Minimal OFS Handshake</title>
 </head>
-<body style="background: #f0f0f0; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
-    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
-        <h2 id="msg">Awaiting Connection...</h2>
-        <button onclick="closePlugin()" style="padding: 10px 20px; cursor: pointer;">Return to Oracle</button>
+<body style="background: #ffffff; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+    <div style="text-align: center;">
+        <h2 id="status">Waiting for Oracle...</h2>
+        <button onclick="closePlugin()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Return to Oracle</button>
     </div>
 
     <script>
         var origin = "";
 
-        // Standardized function to talk to Oracle
-        function callOracle(data) {
-            if (origin) {
-                // Some versions of OFS prefer strings, some prefer objects. 
-                // We send a string to be safe.
-                var message = JSON.stringify(data);
-                window.parent.postMessage(message, origin);
-            }
-        }
-
+        // Listen for the 'init' call from Oracle
         window.addEventListener("message", function(event) {
-            // Log to console so you can see it in your debugger
+            // Log to F12 console to verify hit
             console.log("Plugin received message:", event.data);
 
             var data;
             try {
                 data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
             } catch (e) {
-                console.error("Failed to parse message data");
                 return;
             }
 
             if (data.method === "init") {
                 origin = event.origin;
-                document.getElementById('msg').innerText = "Connected to Oracle!";
+                document.getElementById('status').innerText = "Connected Successfully!";
 
-                // MANDATORY HANDSHAKE
-                // Sending apiVersion: 1 is often required for the handshake to validate
-                callOracle({
+                // MANDATORY RESPONSE: Immediate handshake
+                // We send it as a stringified JSON for maximum compatibility
+                var readyResponse = JSON.stringify({
                     apiVersion: 1,
                     method: 'ready'
                 });
+
+                window.parent.postMessage(readyResponse, origin);
             }
         }, false);
 
         function closePlugin() {
-            callOracle({
+            var closeMsg = JSON.stringify({
                 apiVersion: 1,
                 method: 'close'
             });
+            window.parent.postMessage(closeMsg, origin);
         }
     </script>
 </body>
